@@ -359,6 +359,31 @@ export class Store {
   }
 
   /** Every object reachable from `tips` (commits, their trees and blobs, tags peeled), with a commit depth limit. */
+  /** The exact objects a pack must carry for a set of commits: each commit
+   * plus the closure of its own tree. Parent commits are NOT included, so a
+   * depth-limited fetch sends only the generations it asked for. */
+  commitTreeObjects(repo: Repo, commitOids: readonly string[]): Set<string> {
+    const out = new Set<string>();
+    const visitTree = (oid: string): void => {
+      if (out.has(oid)) return;
+      const object = repo.objects.get(oid);
+      if (!object) return;
+      out.add(oid);
+      if (object.type !== 'tree') return;
+      for (const entry of parseTree(object.data)) {
+        if (entry.mode === '40000') visitTree(entry.oid);
+        else if (repo.objects.has(entry.oid)) out.add(entry.oid);
+      }
+    };
+    for (const oid of commitOids) {
+      const object = repo.objects.get(oid.toLowerCase());
+      if (!object || object.type !== 'commit') continue;
+      out.add(oid.toLowerCase());
+      visitTree(parseCommit(object.data).tree);
+    }
+    return out;
+  }
+
   reachableObjects(repo: Repo, tips: readonly string[], depth = 0): Set<string> {
     const out = new Set<string>();
     const commits = this.reachableCommits(repo, tips, depth);

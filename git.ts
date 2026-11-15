@@ -390,6 +390,7 @@ export interface FetchArgs {
   haves: string[];
   shallow: string[];
   depth: number | null;
+  deepenRelative?: boolean;
 }
 
 interface FetchPlan {
@@ -404,7 +405,33 @@ export function planFetch(store: Store, repo: Repo, args: FetchArgs): FetchPlan 
   const wants = args.wants.filter(isOid);
   const haves = args.haves.filter(isOid);
   const clientShallow = new Set(args.shallow.filter(isOid).map((oid) => oid.toLowerCase()));
-  const depth = args.depth ?? 0;
+  let depth = args.depth ?? 0;
+  if (args.deepenRelative === true && depth > 0 && clientShallow.size > 0) {
+    // `deepen <n>` with `deepen-relative` (real git's `--deepen=N`): n is
+    // relative to the client's current shallow boundary, not absolute. The
+    // boundary sits at some generation below each want; the new absolute
+    // depth is the shallowest such generation plus n.
+    let boundaryGen = Number.POSITIVE_INFINITY;
+    for (const want of wants) {
+      const queue: Array<{ oid: string; generation: number }> = [{ oid: want.toLowerCase(), generation: 1 }];
+      const seen = new Set<string>();
+      while (queue.length > 0) {
+        const current = queue.shift() as { oid: string; generation: number };
+        if (seen.has(current.oid)) continue;
+        seen.add(current.oid);
+        if (clientShallow.has(current.oid)) {
+          boundaryGen = Math.min(boundaryGen, current.generation);
+          continue;
+        }
+        const object = repo.objects.get(current.oid);
+        if (!object || object.type !== 'commit') continue;
+        for (const parent of parseCommit(object.data).parents) {
+          queue.push({ oid: parent.toLowerCase(), generation: current.generation + 1 });
+        }
+      }
+    }
+    if (Number.isFinite(boundaryGen)) depth = boundaryGen + depth;
+  }
 
   // Commits within `depth` generations of the wants (0 = unlimited).
   const wantCommits = store.reachableCommits(repo, wants, depth);
@@ -425,12 +452,13 @@ export function planFetch(store: Store, repo: Repo, args: FetchArgs): FetchPlan 
   }
   const sendCommits = [...wantCommits].filter((oid) => !haveCommits.has(oid));
   // Objects: the closure of the sent commits, minus anything the client holds.
-  const haveObjects = new Set<string>();
-  for (const oid of haveCommits) {
-    for (const entry of store.reachableObjects(repo, [oid], 0)) haveObjects.add(entry);
-  }
+  // The held set is the tree closure of exactly the held commits: a shallow
+  // boundary commit's parents are NOT held, even though they are reachable
+  // from it, so reachableObjects(..., 0) here would wrongly filter out the
+  // very objects a deepen is supposed to deliver.
+  const haveObjects = store.commitTreeObjects(repo, [...haveCommits]);
   const sendObjects = new Map<string, GitObject>();
-  for (const oid of store.reachableObjects(repo, sendCommits, 0)) {
+  for (const oid of store.commitTreeObjects(repo, sendCommits)) {
     if (haveObjects.has(oid)) continue;
     const object = repo.objects.get(oid);
     if (object) sendObjects.set(oid, object);
@@ -521,6 +549,11 @@ export function fetchResponseV2(store: Store, repo: Repo, args: FetchArgs): Buff
     } else {
       parts.push(pktLine('NAK\n'));
     }
+    // Single-round stateless fetch: negotiation is complete, so the server
+    // declares itself ready to send the packfile. Real git requires this
+    // line before any later section; without it a deepen/fetch fails with
+    // "expected no other sections to be sent after no 'ready'".
+    parts.push(pktLine('ready\n'));
     parts.push(pktDelim);
   }
   if (plan.shallow.length > 0 || plan.unshallow.length > 0) {
@@ -589,7 +622,7 @@ function parseFetchArgs(args: readonly string[]): FetchArgs {
     else if (arg.startsWith('deepen ')) {
       const depth = Number.parseInt(arg.slice(7).trim(), 10);
       if (Number.isFinite(depth) && depth > 0) out.depth = depth;
-    }
+    } else if (arg === 'deepen-relative') out.deepenRelative = true;
   }
   return out;
 }
@@ -612,7 +645,7 @@ function parseV0Upload(body: Buffer): FetchArgs {
       else if (line.startsWith('deepen ')) {
         const depth = Number.parseInt(line.slice(7).trim(), 10);
         if (Number.isFinite(depth) && depth > 0) out.depth = depth;
-      }
+      } else if (line === 'deepen-relative') out.deepenRelative = true;
     } else if (line.startsWith('have ')) {
       out.haves.push(line.slice(5).trim());
     }

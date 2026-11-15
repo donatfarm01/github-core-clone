@@ -459,7 +459,7 @@ function pullValue(ctx: Ctx, repo: Repo, pull: Pull): Record<string, unknown> {
     baseRefName: pull.baseRef,
     headRefOid: pull.headSha,
     baseRefOid: pull.baseSha,
-    mergeable: ctx.store.pullMergeable(repo, pull).mergeable,
+    mergeable: ctx.store.pullMergeable(repo, pull),
     merged: pull.merged,
     mergedAt: pull.mergedAt,
     createdAt: FIXED_ISO,
