@@ -111,7 +111,10 @@ function commitJson(store: Store, repo: Repo, oid: string): Record<string, unkno
     sha: oid.toLowerCase(),
     node_id: globalId('Commit', oid.toLowerCase()),
     commit: {
-      message: parsed.message,
+      // The stored git object ends its message with a newline (git
+      // convention), but the API surface returns the message without it,
+      // matching GitHub: the check compares against the message as sent.
+      message: parsed.message.replace(/\n+$/, ''),
       author: authorJson(parsed.author),
       committer: authorJson(parsed.committer),
       tree: { sha: parsed.tree },
