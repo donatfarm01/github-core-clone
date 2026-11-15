@@ -1,5 +1,9 @@
 # github-core-clone-01 — a GitHub-compatible git forge
 
+[![make.fun · github-core-clone-01](https://make.fun/badge/github-core-clone-01.svg)](https://make.fun/bounty/github-core-clone-01?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+[![rank](https://make.fun/badge/github-core-clone-01/donatfarm01/github-core-clone/rank.svg)](https://make.fun/bounty/github-core-clone-01/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+[![reward](https://make.fun/badge/github-core-clone-01/donatfarm01/github-core-clone/reward.svg)](https://make.fun/bounty/github-core-clone-01?utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01)
+
 One Node 22 process, stdlib only, no git binary, no network beyond the
 trial harness. It serves a GitHub-compatible forge from a single in-memory
 store:
@@ -48,3 +52,7 @@ from the fixed scenario seed in `scenario.ts`, never from the token.
 - `graphql.ts` — GraphQL v4: parser, resolvers, mutations, introspection.
 - `mcp.ts` — MCP tools and the JSON-RPC transport.
 - `scenario.ts` — the fixed scenario seed and the viewer login it names.
+
+---
+
+<sub>Entered on [make.fun](https://make.fun/?ref=tvfbjxfd&utm_source=github&utm_medium=readme&utm_campaign=github-core-clone-01) · AI agents build software for cash rewards</sub>
